@@ -1,0 +1,77 @@
+physical layer
+http://en.wikipedia.org/wiki/CAN_bus
+http://en.wikipedia.org/wiki/ISO_11898
+
+collision detect and bus arbitration
+http://en.wikipedia.org/wiki/CAN_bus#Data_transmission
+http://en.wikipedia.org/wiki/Carrier_sense_multiple_access_with_collision_detection
+
+transceiver
+http://www.nxp.com/documents/data_sheet/TJA1051.pdf
+
+collision detect logic
+http://www.nxp.com/documents/data_sheet/74LVC1G58.pdf
+
+processor
+http://www.atmel.com/images/doc2545.pdf
+
+Wherever necessary efficiency of implementation or bandwidth takes priority over human readability of messages on the bus. The embedded processor is very small and any design which uses too much RAM or flash must be discarded. The goal is to use less than 1/4 of memory resources to leave room for app firmware. 8K flash. 1K RAM.
+
+
+Byte order is little endian
+Bit order is LSB first over UART
+
+In transmitted order
+sync_0
+type_0
+type_1
+version_0
+rx_addr_0
+rx_addr_1
+tx_addr_0
+tx_addr_1
+<app payload>
+crc16_0
+crc16_1
+
+An app payload consists of a avr-gcc struct as represented in the AVR's RAM. Little endian, one byte aligned, ordered as specified.
+
+Messages with bad crcs will be dropped.
+
+This network is based on the CAN physical layer. 
+
+The pysical medium is twisted pair cabling with termination resistors at the end of each run to prevent reflections.
+
+Shielded cable is not required. 
+
+The TJA1051 is used as a bus transciever and is responible for translating TTL levels to CAN levels and back. Any high speed CAN transceiver with a silent pin could be used.
+
+Three 74LVC1G58s are used. One as a collision decoder feeding a low pass filter. Two as a NOR latch to hold the collision signal. the output of the NOR latch feeds the silent pin of the CAN transceiver and a processor input.
+
+The CAN frame format is not used. Stuffing bits are not used. The CAN message format is not used.
+
+Jam signals are not used.
+
+The UART 8N1 frame format is used.
+
+Bus arbitration is a bitwise priority scheme combined with CSMA and collison detect. The carrier sense portion of the scheme is prefunctory. It merely checks for two character times whether any valid characters are received. This reduces collisions and retries. Primary arbitration is achieved through bit position priority. If two nodes begin transmitting at the same time the first one to transmit a one while the other is transmitting a zero will detect a collision. Any node which detects a collision will immediately silence its transceiver. A jam signal is not used. As long as the low pass filter on the collision detector is faster than one bit width the message of the other node will remain intact. Upon detecting a collision a node will back off for a progressivley exponential random period. See coax ethernet for an example of the collision detect backoff.
+
+Any message which is transmitted requires that the receiver send an ACK. ACKs are the highest priority messages. A receiver sending an ACK is exempted from the carrier sense wait. A transmitter may not attempt another message until the first message is ACKed. A transmitter shall retry its message if it does not receive an ACK within 2 ACK times. Subsequent retries must double the previous backoff. A transmitter shall send a message up to five total times. If no ACK is received after the fifth transmission the message shall be declared a failure. The failure shall be reported up to the application.
+
+An ACK has a type of 0x0000 and no payload.
+
+Messages without payload are similarly allowed.
+
+The minimum transport overhead is 9 bytes.
+
+There is only one message buffer. It is shared by the receiver, the transmitter and the app. There is a sepaerate ACK buffer.
+
+If a transmitter is busy when an application wishes to send a message the application must hold until the transmitter is finished. RAM contsraint.
+
+If the receiver is busy when an application wishes to send a message the application must hold until the transmitter is finished.
+
+If a request response pair of messages is specififed the response should always be of higher priority than the request. This helps ensure that current buisness is taken care of before new buisness is started.
+
+The implementation shall not hold a second copy of a message in RAM. The implementation may only use the buffer to marshal messages. Before marshalling the implementation shall stop listening for new messages.
+
+
