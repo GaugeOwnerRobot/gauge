@@ -3,21 +3,27 @@
 #include <stddef.h>
 #include "can_transport.h"
 #include "hal.h"
-//#include "cmn_msg_switch.h"
 
+header_s temp_tx_header;
 
-uint8_t msg_length = 0x00;
-
-msg_buffer_t *buffer = &msg_buffer;
+uint16_t get_crc_of_buffer(msg_buffer_u *buffer, uint8_t length)
+{
+    uint16_t calc_crc_16 = 0x0000;
+    for (uint8_t i =0; i < length - 2; i++) {
+        calc_crc_16 = _crc_xmodem_update(calc_crc_16, buffer->buffer[i]);
+    }
+    return calc_crc_16;
+}
 
 void tx_msg_char(void)
 {
-    UDR0 = buffer->raw_buffer[buffer_idx];
-    buffer_idx++;
-    if (buffer_idx == msg_length)
+    UDR0 = tx_buffer.buffer[tx_idx];
+    tx_idx++;
+    if (tx_idx == tx_len)
     {
-        buffer = &msg_buffer;
         rx_state = RX_IDLE;
+        tx_state = TX_IDLE;
+        transport_state = RX;
         switch_to_rx();
     }
 }
@@ -39,7 +45,6 @@ void switch_to_rx(void)
 }
 
 
-
 void ping_req_handler(void)
 {
     //TODO reply
@@ -50,18 +55,18 @@ void ping_req_handler(void)
 typedef struct type_switch_return_s
 {
     size_t size;
-    handler_fp_t handler;
+    handler_fp handler;
     uint8_t error;
 } type_switch_return_s;
 
-type_switch_return_s type_switch()
+type_switch_return_s type_switch(msg_buffer_u *buffer)
 {
     type_switch_return_s app_msg_info;
-    switch(buffer->header.type)
+    switch(buffer->msg.header.type)
     {
         case PING_REQ:
              app_msg_info.handler = ping_req_handler;
-             app_msg_info.size = sizeof(PING_REQ_msg);
+             app_msg_info.size = sizeof(PING_REQ_s);
              app_msg_info.error = 0;
              break;
         default:
@@ -73,11 +78,9 @@ type_switch_return_s type_switch()
 
 void store_one_rx_char(uint8_t rx_char)
 {
-    PORTC ^=0x01;
-    buffer->raw_buffer[buffer_idx] = rx_char;
-    buffer_idx++;
+    rx_buffer.buffer[rx_idx] = rx_char;
+    rx_idx++;
 }
-
 
 void process_one_rx_char(uint8_t rx_char)
 {
@@ -86,27 +89,26 @@ void process_one_rx_char(uint8_t rx_char)
         case RX_IDLE:
             if (rx_char == SYNC_BYTE_VALUE)
             {
-                buffer = &msg_buffer;
-                buffer_idx = 0x00;
-                msg_length = 0x00;
+                rx_idx = 0x00;
+                rx_len = 0x00;
                 rx_state = RX_HEADER;
-                transport_state = RX_ACTIVE;
+                transport_state = RX;
                 store_one_rx_char(rx_char);
             }
             break;
         case RX_HEADER:
             store_one_rx_char(rx_char);
-            if (buffer_idx == sizeof(buffer->header)) // done rxing header
+            if (rx_idx == sizeof(rx_buffer.msg.header)) // done rxing header
             {
                 //filter for address and version
-                if (buffer->header.dest_addr == address.address && buffer->header.version == VERSION)
+                if (rx_buffer.msg.header.dest_addr == address.as_uint16 && rx_buffer.msg.header.version == VERSION)
                 {
-                    type_switch_return_s app_msg_info = type_switch();
-                    //discover length from type
+                    //demux type
+                    type_switch_return_s app_msg_info = type_switch(&rx_buffer);
                     if (app_msg_info.error == 0)
                     {
                         rx_state = RX_MSG;
-                        msg_length = CRC_SIZE + sizeof(buffer->header) + app_msg_info.size;
+                        rx_len = CRC_SIZE + sizeof(rx_buffer.msg.header) + app_msg_info.size;
                     }
                     else
                     {
@@ -120,24 +122,26 @@ void process_one_rx_char(uint8_t rx_char)
             }
             break;
         case RX_MSG:
-            PORTC ^= 0x04;
             store_one_rx_char(rx_char);
-            if (buffer_idx == msg_length) //done rxing message
+            if (rx_idx == rx_len) //done rxing message
             {
-                crc_t crc;
-                crc.crc_bytes.crc_low = buffer->raw_buffer[msg_length - 2];
-                crc.crc_bytes.crc_high = buffer->raw_buffer[msg_length - 1];
-                if (crc.crc == get_crc_of_buffer()) //CRC passes
+                
+                //setup CRC
+                bytes_and_uint16_u crc;
+                crc.as_bytes.low = rx_buffer.buffer[rx_len - 2];
+                crc.as_bytes.high = rx_buffer.buffer[rx_len - 1];
+                //CRC passes
+                if (crc.as_uint16 == get_crc_of_buffer(&rx_buffer, rx_len))
                 {
-                    if (buffer->header.type == ACK_MSG_TYPE)
+                    if (rx_buffer.msg.header.type == ACK)
                     {
                         //ack received
                         rx_state = RX_IDLE;
                     }
                     else
                     {
-                        PORTC ^= 0x02;
-                        send_ack(buffer->header.src_addr);
+                        rx_state = RX_SEND_ACK;
+                        send_ack(rx_buffer.msg.header.src_addr);
                     }
                 }
                 else
@@ -150,43 +154,47 @@ void process_one_rx_char(uint8_t rx_char)
 }
 
 
-void send_ack(uint16_t addr)
+void set_crc_of_tx_buffer(void)
 {
-    buffer = &ack_buffer;
-    buffer->header.sync = SYNC_BYTE_VALUE;
-    buffer->header.dest_addr = addr;
-    buffer->header.src_addr = address.address;
-    buffer->header.type = ACK_MSG_TYPE;
-    buffer->header.version = VERSION;
-    msg_length = sizeof(buffer->header) + CRC_SIZE;
-    crc_t crc;
-    crc.crc = get_crc_of_buffer();
-    buffer->raw_buffer[msg_length - 2] = crc.crc_bytes.crc_low;
-    buffer->raw_buffer[msg_length - 1] = crc.crc_bytes.crc_high;
-    buffer_idx = 0x00;
+    bytes_and_uint16_u crc;
+    crc.as_uint16 = get_crc_of_buffer(&tx_buffer, tx_len);
+    tx_buffer.buffer[tx_len - 2] = crc.as_bytes.low;
+    tx_buffer.buffer[tx_len - 1] = crc.as_bytes.high;
+}
+
+void set_tx_header(uint16_t addr, uint16_t type)
+{
+    tx_buffer.msg.header.sync = SYNC_BYTE_VALUE;
+    tx_buffer.msg.header.dest_addr = addr;
+    tx_buffer.msg.header.src_addr = address.as_uint16;
+    tx_buffer.msg.header.type = type;
+    tx_buffer.msg.header.version = VERSION;
+    type_switch_return_s app_msg_info = type_switch(&tx_buffer);
+    tx_len = sizeof(tx_buffer.msg.header) + CRC_SIZE + app_msg_info.size;
+}
+
+void start_tx(void)
+{
+    tx_idx = 0x00;
     switch_to_tx();
     tx_msg_char();
 }
 
+void send_ack(uint16_t addr)
+{
+    temp_tx_header = tx_buffer.msg.header;
+    set_tx_header(addr, ACK);
+    set_crc_of_tx_buffer();
+    start_tx();
+}
+
+
+
 void send_msg(uint16_t addr, uint16_t type)
 {
-    enable_tx();
-    transport_state = TX_ACTIVE;
-    buffer = &msg_buffer;
-    buffer->header.sync = SYNC_BYTE_VALUE;
-    buffer->header.type = type;
-    buffer->header.dest_addr = addr;
-    buffer->header.src_addr = address.address;
-    buffer->header.version = VERSION;
-    type_switch_return_s app_msg_info = type_switch();
-    msg_length = CRC_SIZE + sizeof(buffer->header) + app_msg_info.size;
-    crc_t crc;
-    crc.crc = get_crc_of_buffer();
-    buffer->raw_buffer[msg_length - 2] = crc.crc_bytes.crc_low;
-    buffer->raw_buffer[msg_length - 1] = crc.crc_bytes.crc_high;
-    buffer_idx = 0x00;
-    switch_to_tx();
-    tx_msg_char();
+    set_tx_header(addr, type);
+    set_crc_of_tx_buffer();
+    start_tx();
 }
 
 //for debug
@@ -196,19 +204,9 @@ void tx_char(char tx_char) {
 }
 
 
-uint16_t get_crc_of_buffer(void)
-{
-    uint16_t calc_crc_16 = 0x0000;
-    uint8_t i = 0;
-    for (i =0; i < msg_length - 2; i++) {
-        calc_crc_16 = _crc_xmodem_update(calc_crc_16, buffer->raw_buffer[i]);
-    }
-    return calc_crc_16;
-
-}
 
 void set_address(uint16_t addr)
 {
-    address.address = addr;
+    address.as_uint16 = addr;
 }
 

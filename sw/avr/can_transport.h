@@ -15,94 +15,105 @@
 //temp
 #define VERSION 0
 
-typedef void (*handler_fp_t)(void);
+typedef void (*handler_fp)(void);
 
 typedef enum
 {
     RX_IDLE,
     RX_HEADER,
     RX_MSG,
+    RX_SEND_ACK,
 } rx_state_enum;
 
 typedef enum 
 {
-    IDLE,
-    TX_ACTIVE,
-    RX_ACTIVE,
-    COLLISION_BACKOFF,
-    WAITING_FOR_ACK,
-    APP_BUFFER_LOCK,
+    RX,
+    TX,
 } transport_state_enum;
 
 typedef enum 
 {
-    ACK_IDLE,
-} ack_state_enum;
+    TX_IDLE,
+    TX_WAITING_FOR_RX,
+    TX_CARRIER_SENSE,
+    TX_SEND,
+    TX_COLLISION,
+    TX_ACK,
+} tx_state_enum;
 
-typedef struct can_header_t {
-    uint8_t sync;
-    uint16_t type;
-    uint16_t dest_addr;
-    uint16_t src_addr;
-    uint8_t version;
-} can_header_t;
-
-typedef union msg_buffer_t {
-    uint8_t raw_buffer[BUFFER_SIZE];
-    can_header_t header;
-} msg_buffer_t;
-
-msg_buffer_t msg_buffer;
-
-typedef union ack_buffer_t
-{
-    uint8_t raw_buffer[sizeof(can_header_t) + CRC_SIZE];
-    can_header_t header;
-} ack_buffer_t;
-
-ack_buffer_t ack_buffer;
-
-typedef struct address_bytes_t {
-    uint8_t addr_low;
-    uint8_t addr_high;
-} address_bytes_t;
-
-typedef union address_t {
-    address_bytes_t address_bytes;
-    uint16_t address;
-} address_t;
-
-typedef struct crc_bytes_t {
-    uint8_t crc_low;
-    uint8_t crc_high;
-} crc_bytes_t;
-
-typedef union crc_t {
-    crc_bytes_t crc_bytes;
-    uint16_t crc;
-} crc_t;
-
+uint8_t tx_retry_count;
+uint8_t tx_collision_count;
 
 //move this section to an autogen library
 typedef enum
 {
-    ACK_MSG_TYPE = 0x0000,
+    ACK = 0xFFFF,
     PING_REQ = 0xEEEE,
-} messages;
+} msgs_enum;
 
-typedef struct PING_REQ_msg
+typedef struct PING_REQ_s
 {
     uint8_t tag;
-} PING_REQ_msg;
+} PING_REQ_s;
+
+//end autogen section
+
+typedef union app_msgs_u
+{
+    PING_REQ_s ping_req;
+} app_msgs_u;
+
+
+typedef struct header_s 
+{
+    uint8_t sync;
+    uint8_t priority;
+    uint16_t type;
+    uint16_t dest_addr;
+    uint16_t src_addr;
+    uint8_t version;
+} header_s;
+
+typedef struct header_and_app_msgs_s
+{
+    header_s header;
+    app_msgs_u app_msgs;
+} header_and_app_msgs_s;
+
+typedef union msg_buffer_u {
+    uint8_t buffer[sizeof(header_and_app_msgs_s)];
+    header_and_app_msgs_s msg;
+} msg_buffer_u;
+
+msg_buffer_u rx_buffer;
+msg_buffer_u tx_buffer;
+
+uint8_t rx_idx;
+uint8_t tx_idx;
+
+uint8_t rx_len;
+uint8_t tx_len;
+
+typedef struct two_bytes_s 
+{
+    uint8_t low;
+    uint8_t high;
+} two_bytes_s;
+
+typedef union bytes_and_uint16_u
+{
+    two_bytes_s as_bytes;
+    uint16_t as_uint16;
+} bytes_and_uint16_u;
+
+
+bytes_and_uint16_u address;
 
 uint8_t transport_state;
-uint8_t ack_state;
+uint8_t tx_state;
 uint8_t rx_state;
 
-address_t address;
-uint8_t buffer_idx;
 
-uint16_t get_crc_of_buffer(void);
 void tx_char(char tx_char);
 void process_one_rx_char(uint8_t rx_char);
 void store_one_rx_char(uint8_t rx_char);
