@@ -12,17 +12,17 @@ http://www.nxp.com/documents/data_sheet/TJA1051.pdf
 collision detect logic
 http://www.nxp.com/documents/data_sheet/74LVC1G58.pdf
 
-processor
+processor atmega88
 http://www.atmel.com/images/doc2545.pdf
 
-Wherever necessary efficiency of implementation or bandwidth takes priority over human readability of messages on the bus. The embedded processor is very small and any design which uses too much RAM or flash must be discarded. The goal is to use less than 1/4 of memory resources to leave room for app firmware. 8K flash. 1K RAM.
-
+Wherever necessary efficiency of implementation or bandwidth takes priority over human readability of messages on the bus. The embedded processor is very small and any design which uses too much RAM or flash must be discarded. The goal is to use less than 1/4 of memory resources to leave room for app firmware. 8K flash. 1K RAM. Attempt to use less than 2K flash and 256 bytes RAM. A drop in part with 16K flash is available for large flash footprint applications.
 
 Byte order is little endian
 Bit order is LSB first over UART
 
 In transmitted order
 sync_0
+priority_0
 type_0
 type_1
 version_0
@@ -33,6 +33,8 @@ tx_addr_1
 <app payload>
 crc16_0
 crc16_1
+
+The minimum transport overhead is 11 bytes.
 
 An app payload consists of a avr-gcc struct as represented in the AVR's RAM. Little endian, one byte aligned, ordered as specified.
 
@@ -54,24 +56,25 @@ Jam signals are not used.
 
 The UART 8N1 frame format is used.
 
-Bus arbitration is a bitwise priority scheme combined with CSMA and collison detect. The carrier sense portion of the scheme is prefunctory. It merely checks for two character times whether any valid characters are received. This reduces collisions and retries. Primary arbitration is achieved through bit position priority. If two nodes begin transmitting at the same time the first one to transmit a one while the other is transmitting a zero will detect a collision. Any node which detects a collision will immediately silence its transceiver. A jam signal is not used. As long as the low pass filter on the collision detector is faster than one bit width the message of the other node will remain intact. Upon detecting a collision a node will back off for a progressivley exponential random period. See coax ethernet for an example of the collision detect backoff.
+Bus arbitration is a bitwise priority scheme combined with CSMA and collison detect. Carrier sense is handled by checking whether a message is currently being received and whether a byte is being received. If both states are idle the node waits one bit time and checks again. If the bus is quiet both time transmission begins. This has the effect of not interrupting a currently in progress transmission. It also synchronizes the nodes who wish to transmit so that priority arbitration will happen. Priority arbitration is achieved through bit position priority. If two nodes begin transmitting at the same time the first one to transmit a zero while the other is transmitting a one will detect a collision. Any node which detects a collision will immediately silence its transceiver. A jam signal is not used. As long as the low pass filter on the collision detector is fast enough the message of the other node will remain intact. Upon detecting a collision a node will back off for a progressivley exponential random period. See coax ethernet for an example of the collision detect backoff.
 
-Any message which is transmitted requires that the receiver send an ACK. ACKs are the highest priority messages. A receiver sending an ACK is exempted from the carrier sense wait. A transmitter may not attempt another message until the first message is ACKed. A transmitter shall retry its message if it does not receive an ACK within 2 ACK times. Subsequent retries must double the previous backoff. A transmitter shall send a message up to five total times. If no ACK is received after the fifth transmission the message shall be declared a failure. The failure shall be reported up to the application.
 
-An ACK has a type of 0x0000 and no payload.
+Any message which is transmitted requires that the receiver send an ACK. ACKs are the highest priority messages and use the highest priority value. A receiver sending an ACK is exempted from doing any carrier sense. It can be confident that the ACK is the highest priority and that the bus is quiet. A transmitter may not attempt another message until the first message is ACKed. A transmitter shall retry its message if it does not start to receive an ACK within 2 character times. Subsequent retries must double the previous retry time. A transmitter shall send a message up to five total times. If no ACK is received after the fifth transmission the message shall be declared a failure. The failure shall be reported up to the application.
+
+One byte of priority gives us 9 priority levels. The highest priority level is reserved for ACKs.
+
+An ACK has a type of 0xFFFF and no payload.
 
 Messages without payload are similarly allowed.
 
-The minimum transport overhead is 9 bytes.
+There are two message buffers. RX and TX.
 
-There is only one message buffer. It is shared by the receiver, the transmitter and the app. There is a sepaerate ACK buffer.
+If a node wants to send a message and the TX buffer already has a message in it the app must wait.
 
-If a transmitter is busy when an application wishes to send a message the application must hold until the transmitter is finished. RAM contsraint.
+If a node is receiving a message and the app wishes to send a message the node will wait until the RX message is done. If the message was addressed to the receiving node it will then send an ACK. The carrier sense will be performed. Then the node will start transmitting the app's message.
 
-If the receiver is busy when an application wishes to send a message the application must hold until the transmitter is finished.
+If a request response pair of messages is being handled the handler should increment by one the priority of the request and use that in the response. This helps ensure that current buisness is taken care of before new buisness is started.
 
-If a request response pair of messages is specififed the response should always be of higher priority than the request. This helps ensure that current buisness is taken care of before new buisness is started.
-
-The implementation shall not hold a second copy of a message in RAM. The implementation may only use the buffer to marshal messages. Before marshalling the implementation shall stop listening for new messages.
+The implementation shall not hold a second copy of a message in RAM. The implementation may only use the TX buffer to marshal messages. 
 
 
