@@ -67,10 +67,10 @@ type_switch_return_s type_switch(msg_buffer_u *buffer)
         case PING_REQ:
              app_msg_info.handler = ping_req_handler;
              app_msg_info.size = sizeof(PING_REQ_s);
-             app_msg_info.error = 0;
+             app_msg_info.error = 0x00;
              break;
         default:
-             app_msg_info.error = -1;
+             app_msg_info.error = 0xFF;
              break;
     }
     return app_msg_info;

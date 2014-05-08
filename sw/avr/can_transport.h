@@ -56,11 +56,16 @@ typedef struct PING_REQ_s
     uint8_t tag;
 } PING_REQ_s;
 
+typedef struct PING_RSP_s
+{
+    uint8_t tag;
+} PING_RSP_s;
 //end autogen section
 
 typedef union app_msgs_u
 {
     PING_REQ_s ping_req;
+    PING_RSP_s ping_rsp;
 } app_msgs_u;
 
 
