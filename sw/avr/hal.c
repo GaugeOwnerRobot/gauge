@@ -1,6 +1,5 @@
 #include <avr/io.h>
 #include "hal.h"
-#pragma once
 
 
 void setup_timer0(void) {

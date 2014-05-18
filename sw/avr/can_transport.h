@@ -3,11 +3,6 @@
 #include <stdint.h>
 
 #define BUFFER_SIZE 64
-#define MSG_OVERHEAD 10
-#define ADDR_SIZE 2
-#define LENGTH_POSITION 5 
-#define MSG_TYPE_SIZE 2
-#define VERSION_SIZE 1
 #define CRC_SIZE 2
 #define SYNC_BYTE_VALUE 0x55
 
@@ -86,7 +81,7 @@ typedef struct header_and_app_msgs_s
 } header_and_app_msgs_s;
 
 typedef union msg_buffer_u {
-    uint8_t buffer[sizeof(header_and_app_msgs_s)];
+    uint8_t buffer[sizeof(header_and_app_msgs_s) + CRC_SIZE];
     header_and_app_msgs_s msg;
 } msg_buffer_u;
 
@@ -126,7 +121,7 @@ void switch_to_rx(void);
 void switch_to_tx(void);
 void tx_msg_char(void);
 void send_ack(uint16_t addr);
-void send_msg(uint16_t addr, uint16_t type);
+void send_msg(uint16_t addr, uint16_t type, uint8_t priority);
 void set_address(uint16_t addr);
 
 #endif //CAN_TRANSPORT_H

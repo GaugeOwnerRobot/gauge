@@ -1,5 +1,5 @@
-#define F_CPU 20000000UL
-#include <util/delay.h>
+//#define F_CPU 20000000UL
+//#include <util/delay.h>
 
 #define BAUD_UBRR 64 // 38400 in double speed mode
 #include <avr/io.h>
@@ -57,19 +57,17 @@ int main(void)
 
     sei();
 
- //   puts("Hello world");
- //
-    _delay_ms(100);
-    PING_REQ_msg *msg = &(msg_buffer.raw_buffer[CRC_SIZE + sizeof(msg_buffer.header)]);
-    msg->tag = 0x11;
-    send_msg(0x1234, PING_REQ);
-    while(1){
+    while(PIND & (1 <<7));
+    tx_buffer.msg.app_msgs.ping_req.tag = 0x11;
+    send_msg(0x1234, PING_REQ, 0x00);
+    while (1)
+    {
+    }
 
         //PORTC = 0xFF;
         //PORTC = 0x00;
         //tx_char(0x55);
 
-    }
     return 1;
 }
 

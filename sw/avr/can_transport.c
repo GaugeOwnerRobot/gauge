@@ -69,6 +69,10 @@ type_switch_return_s type_switch(msg_buffer_u *buffer)
              app_msg_info.size = sizeof(PING_REQ_s);
              app_msg_info.error = 0x00;
              break;
+        case ACK:
+             app_msg_info.handler = NULL;
+             app_msg_info.size = 0x00;
+             app_msg_info.error = 0x00;
         default:
              app_msg_info.error = 0xFF;
              break;
@@ -125,7 +129,6 @@ void process_one_rx_char(uint8_t rx_char)
             store_one_rx_char(rx_char);
             if (rx_idx == rx_len) //done rxing message
             {
-                
                 //setup CRC
                 bytes_and_uint16_u crc;
                 crc.as_bytes.low = rx_buffer.buffer[rx_len - 2];
@@ -140,8 +143,12 @@ void process_one_rx_char(uint8_t rx_char)
                     }
                     else
                     {
+                        //send ACK on successful receive
                         rx_state = RX_SEND_ACK;
-                        send_ack(rx_buffer.msg.header.src_addr);
+                        //send_ack(rx_buffer.msg.header.src_addr);
+                        tx_buffer.msg.app_msgs.ping_req.tag = 0x11;
+                        send_msg(0x1234, PING_REQ, 0x00);
+
                     }
                 }
                 else
@@ -162,14 +169,16 @@ void set_crc_of_tx_buffer(void)
     tx_buffer.buffer[tx_len - 1] = crc.as_bytes.high;
 }
 
-void set_tx_header(uint16_t addr, uint16_t type)
+void set_tx_header(uint16_t addr, uint16_t type, uint8_t priority)
 {
     tx_buffer.msg.header.sync = SYNC_BYTE_VALUE;
+    tx_buffer.msg.header.priority = priority;
     tx_buffer.msg.header.dest_addr = addr;
     tx_buffer.msg.header.src_addr = address.as_uint16;
     tx_buffer.msg.header.type = type;
     tx_buffer.msg.header.version = VERSION;
     type_switch_return_s app_msg_info = type_switch(&tx_buffer);
+    //TODO check app_msg_info error
     tx_len = sizeof(tx_buffer.msg.header) + CRC_SIZE + app_msg_info.size;
 }
 
@@ -182,26 +191,26 @@ void start_tx(void)
 
 void send_ack(uint16_t addr)
 {
-    temp_tx_header = tx_buffer.msg.header;
-    set_tx_header(addr, ACK);
+    //temp_tx_header = tx_buffer.msg.header;
+    set_tx_header(addr, ACK, 0xFF);
     set_crc_of_tx_buffer();
     start_tx();
 }
 
 
 
-void send_msg(uint16_t addr, uint16_t type)
+void send_msg(uint16_t addr, uint16_t type, uint8_t priority)
 {
-    set_tx_header(addr, type);
+    set_tx_header(addr, type, priority);
     set_crc_of_tx_buffer();
     start_tx();
 }
 
-//for debug
-void tx_char(char tx_char) {
-    while ( !( UCSR0A & (1<<UDRE0)) );
-    UDR0 = tx_char;
-}
+////for debug
+//void tx_char(char tx_char) {
+//    while ( !( UCSR0A & (1<<UDRE0)) );
+//    UDR0 = tx_char;
+//}
 
 
 

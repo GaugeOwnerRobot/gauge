@@ -18,7 +18,8 @@ PROJECT_SRC = hal.c \
 
 SRC = $(TARGET).c $(PROJECT_SRC)
 ASRC = 
-OPT = s -mcall-prologues
+OPT = 0
+#s -mcall-prologues
 
 # Name of this Makefile (used for "make depend").
 MAKEFILE = Makefile
@@ -171,15 +172,15 @@ program: $(TARGET).hex $(TARGET).eep
 
 # Enter DWEN mode
 setupdebug:
-	$(AVRDUDE) $(AVRDUDE_BASIC) -Uhfuse:w:0x9f:m
+	sudo $(AVRDUDE) $(AVRDUDE_BASIC) -Uhfuse:w:0x9f:m
 
 debug:
 	sudo avarice -g -w -P $(MCU) :4242
 
 nodebug:
-	$(AVRDUDE) $(AVRDUDE_BASIC) || true
+	sudo $(AVRDUDE) $(AVRDUDE_BASIC) || true
 	sleep 5
-	$(AVRDUDE) $(AVRDUDE_BASIC) $(AVRDUDE_HFUSE)
+	sudo $(AVRDUDE) $(AVRDUDE_BASIC) $(AVRDUDE_HFUSE)
 
 
 
