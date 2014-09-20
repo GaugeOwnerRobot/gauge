@@ -1,0 +1,20 @@
+python 2.6+
+pymlconf
+crc16
+PySerial
+cogapp
+nocog
+
+ubuntu packages
+gcc-avr
+gdb-avr
+binutils-avr
+gcc
+gdb
+binutils
+build-essential
+python-all-dev
+python-pip
+git
+
+

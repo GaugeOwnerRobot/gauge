@@ -12,7 +12,7 @@ http://www.nxp.com/documents/data_sheet/TJA1051.pdf
 collision detect logic
 http://www.nxp.com/documents/data_sheet/74LVC1G58.pdf
 
-processor atmega88
+processor atmega88 or atmega168
 http://www.atmel.com/images/doc2545.pdf
 
 Wherever necessary efficiency of implementation or bandwidth takes priority over human readability of messages on the bus. The embedded processor is very small and any design which uses too much RAM or flash must be discarded. The goal is to use less than 1/4 of memory resources to leave room for app firmware. 8K flash. 1K RAM. Attempt to use less than 2K flash and 256 bytes RAM. A drop in part with 16K flash is available for large flash footprint applications.
