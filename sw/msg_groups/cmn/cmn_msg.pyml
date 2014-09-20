@@ -1,0 +1,51 @@
+PING_REQ:
+    type: 0x0000
+    fields: [
+        sequence: uint8,
+        ]
+
+PING_RSP:
+    type: 0x8000
+    fields: [
+        sequence: uint8,
+        ]
+    
+READ_GPIO_REQ:
+    type: 0x0001
+    fields: [
+        tag: uint8,
+        port: uint8,
+        ]
+
+READ_GPIO_RSP:
+    type: 0x8001
+    fields: [
+        tag: uint8,
+        port: uint8,
+        value: uint8,
+    ]
+
+SET_DDR_REQ:
+    type: 0x0002
+    fields: [
+        tag: uint8,
+        port: uint8,
+        value: uint8,
+        ]
+
+SET_DDR_RSP:
+    type: 0x8002
+    fields: [
+        tag: uint8,
+        port: uint8,
+        value: uint8,
+        ]
+
+
+GPIO_port_enum:
+    PORTA: 0
+    PORTB: 1
+    PORTC: 2
+    PORTD: 3
+    PORTE: 4
+    PORTF: 5
